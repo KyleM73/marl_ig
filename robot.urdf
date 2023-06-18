@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<robot name="robot">
+
+  <material name="red">
+    <color rgba="1 0 0 1"/>
+  </material>
+
+  <link name="base_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+    <collision>
+      <geometry>
+        <cylinder length="0.5" radius="0.2"/>
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder length="0.5" radius="0.2"/>
+      </geometry>
+      <material name="red"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </visual>
+  </link>
+
+</robot>

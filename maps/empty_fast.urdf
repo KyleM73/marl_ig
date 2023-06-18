@@ -1,0 +1,128 @@
+<?xml version="1.0"?>
+<robot name="empty_fast_fast">
+
+<link name="base">
+<inertial>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+<mass value="0.0000001"/>
+<inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+</inertial>
+</link>
+
+<link name="0_0">
+<inertial>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+<mass value="0.020000000000000004"/>
+<inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+</inertial>
+<collision>
+<geometry>
+<box size="0.1 20.0 2"/>
+</geometry>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+</collision>
+<visual>
+<geometry>
+<box size="0.1 20.0 2"/>
+</geometry>
+<material name="concrete">
+<color rgba="0.62 0.62 0.62 1"/>
+</material>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+</visual>
+</link>
+
+<joint name="0_0_joint" type="fixed">
+<parent link="base"/>
+<child link="0_0"/>
+<origin rpy="0 0 0" xyz="-9.950000000000001 9.1 1.0"/>
+</joint>
+
+<link name="0_1">
+<inertial>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+<mass value="0.020000000000000004"/>
+<inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+</inertial>
+<collision>
+<geometry>
+<box size="19.900000000000002 0.1 2"/>
+</geometry>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+</collision>
+<visual>
+<geometry>
+<box size="19.900000000000002 0.1 2"/>
+</geometry>
+<material name="concrete">
+<color rgba="0.62 0.62 0.62 1"/>
+</material>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+</visual>
+</link>
+
+<joint name="0_1_joint" type="fixed">
+<parent link="base"/>
+<child link="0_1"/>
+<origin rpy="0 0 0" xyz="0.05 19.05 1.0"/>
+</joint>
+
+<link name="0_199">
+<inertial>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+<mass value="0.020000000000000004"/>
+<inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+</inertial>
+<collision>
+<geometry>
+<box size="0.1 20.0 2"/>
+</geometry>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+</collision>
+<visual>
+<geometry>
+<box size="0.1 20.0 2"/>
+</geometry>
+<material name="concrete">
+<color rgba="0.62 0.62 0.62 1"/>
+</material>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+</visual>
+</link>
+
+<joint name="0_199_joint" type="fixed">
+<parent link="base"/>
+<child link="0_199"/>
+<origin rpy="0 0 0" xyz="9.950000000000001 9.1 1.0"/>
+</joint>
+
+<link name="199_1">
+<inertial>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+<mass value="0.020000000000000004"/>
+<inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+</inertial>
+<collision>
+<geometry>
+<box size="19.900000000000002 0.1 2"/>
+</geometry>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+</collision>
+<visual>
+<geometry>
+<box size="19.900000000000002 0.1 2"/>
+</geometry>
+<material name="concrete">
+<color rgba="0.62 0.62 0.62 1"/>
+</material>
+<origin rpy="0 0 0" xyz="0 0 0"/>
+</visual>
+</link>
+
+<joint name="199_1_joint" type="fixed">
+<parent link="base"/>
+<child link="199_1"/>
+<origin rpy="0 0 0" xyz="0.05 -0.8500000000000001 1.0"/>
+</joint>
+
+</robot>
