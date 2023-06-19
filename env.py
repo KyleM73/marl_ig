@@ -39,11 +39,11 @@ class SearchEnv(gym.Env):
             "context" : gym.spaces.Box(low=-1, high=1, shape=(self.cfg["N_ROBOTS"] * self.cfg["CONTEXT"],), dtype=np.float32, seed=self.rng)
             }, seed=self.rng)
 
-    def reset(self, seed=None, options=None):
         ## initiate simulation
         self.client.resetSimulation()
         self.client.setTimeStep(1./self.cfg["PHYSICS_HZ"])
         self.client.setGravity(0, 0, -10)
+        self.client.setPhysicsEngineParameter(enableFileCaching=0)
 
         ## setup ground
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
@@ -54,9 +54,10 @@ class SearchEnv(gym.Env):
         ## setup walls
         random_idx = self.rng.integers(0, len(self.cfg["MAP_LIST"]))
         file = self.cfg["MAP_LIST"][random_idx]
-        env_c = EnvCreator.envCreator(file=file,resolution=self.cfg["RESOLUTION"],height=2,density=1,flip=False)
+        env_c = EnvCreator.envCreator(file=file,resolution=self.cfg["RESOLUTION"], height=2, density=1, flip=False)
         self.map = env_c.image2occupancy()
         map_urdf = env_c.get_urdf_fast(output_dir="./maps")
+        #map_urdf = env_c.get_urdf(output_dir="./maps")
         self.walls = self.client.loadURDF(map_urdf, basePosition=[0, -9.1, 0], useFixedBase=True)#, flags=p.URDF_MERGE_FIXED_LINKS)
         self.client.changeDynamics(self.walls, -1, lateralFriction=0.0,
                 spinningFriction=0.0, rollingFriction=0.0)
@@ -103,6 +104,35 @@ class SearchEnv(gym.Env):
             target_node.set_pose(self._rc2minirc(*self._xy2rc(*pose[:2])))
             self.target_nodes.append(target_node)
 
+    def reset(self, seed=None, options=None):
+        for i in range(len(self.robots)):
+            pose,ori = self._get_random_pose()
+            self.client.resetBasePositionAndOrientation(self.robots[i], [*pose, 0.25], p.getQuaternionFromEuler([0, 0, ori]))
+            vel = self.rng.random()
+            fov = self.rng.random()
+            lidar_range = self.rng.random()
+            self.competancies[i] = {
+                "Vel"   : vel,
+                "FOV"   : fov,
+                "Range" : lidar_range
+            }
+
+        self.target_nodes = []
+        for i in range(len(self.targets)):
+            pose,ori = self._get_random_pose()
+            self.client.resetBasePositionAndOrientation(self.targets[i], [*pose, 0.25], p.getQuaternionFromEuler([0, 0, ori]))
+            target_node = path_planning.Node()
+            target_node.set_pose(self._rc2minirc(*self._xy2rc(*pose[:2])))
+            self.target_nodes.append(target_node)
+
+        ## setup map and low dim map
+        self.entropy = np.zeros_like(self.map, dtype=np.float32)
+        k = self.cfg["MAP_REDUCTION_FACTOR"]
+        mini_rows = self.cfg["HEIGHT"] // k
+        mini_cols = self.cfg["WIDTH"] // k
+        self.mini_map = self.map.reshape(mini_rows, k, mini_cols, k).max(axis=(1, 3))
+        self.mini_map_grid = path_planning.Grid(self.mini_map)
+        
         ## initialize objects
         for _ in range(10):
             self.client.stepSimulation()
@@ -393,10 +423,11 @@ class SearchEnv(gym.Env):
         return points#[1:-1] #do not include endpoints
 
 if __name__ == "__main__":
-    #from stable_baselines3.common.env_checker import check_env
+    from stable_baselines3.common.env_checker import check_env
     
-    env = SearchEnv(training=False, cfg="./base_config.yaml")
-    #check_env(env)
+    env = SearchEnv(training=True, cfg="./base_config.yaml")
+    check_env(env)
+    assert False
     env.reset()
 
     import time
