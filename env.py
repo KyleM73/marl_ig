@@ -144,6 +144,7 @@ class SearchEnv(gym.Env):
         self.t = 0
         self.target_idx = 0
         self.repeat = max(1,self.cfg["PHYSICS_HZ"] // self.cfg["UPDATE_HZ"])
+        self.episode_rewards = 0
 
         self.obs = self._get_obs()
         self._setup_plot()
@@ -202,6 +203,7 @@ class SearchEnv(gym.Env):
 
         self.obs = self._get_obs()
         self.rew = self._get_rew()
+        self.episode_rewards += self.rew
         self.done = self._get_dones()
         self.infos = {"terminal_observation" : self.obs} if self.done else {}
         self._plot()
@@ -239,29 +241,34 @@ class SearchEnv(gym.Env):
 
     def _get_rew(self):
         info_gain_rew = np.sum(np.abs(self.entropy)) - np.sum(np.abs(self.last_entropy))
+        max_info_gain = 0
         feasability_rew = 0
         separation_rew = 0
         for i in range(len(self.robots)):
+            range_scale = (self.cfg["MAX_RANGE"] - self.cfg["MIN_RANGE"]) * self.competancies[i]["Range"] + self.cfg["MIN_RANGE"]
+            fov_scale = (self.cfg["MAX_FOV"] - self.cfg["MIN_FOV"]) * self.competancies[i]["FOV"] + self.cfg["MIN_FOV"]
+            max_info_gain += np.pi * range_scale**2 * fov_scale / 360
             feasability_rew -= self.path_lens[i] - self.cfg["WAYPOINT_RADIUS"]
             for j in range(len(self.robots)):
                 if i != j:
                     pose1, _ = self.client.getBasePositionAndOrientation(self.robots[i])
                     pose2, _ = self.client.getBasePositionAndOrientation(self.robots[j])
-                    separation_rew += np.linalg.norm(np.array(pose2[:2]) - np.array(pose1[:2])) / (2**0.5 * self.cfg["WIDTH"] * self.cfg["RESOLUTION"])
+                    separation_rew += np.linalg.norm(np.array(pose1[:2]) - np.array(pose2[:2])) / (2**0.5 * self.cfg["WIDTH"] * self.cfg["RESOLUTION"])
+        info_gain_rew /= max_info_gain
         separation_rew /= 2 #poses are double counted
         collision_rew = -self.cfg["COLLISION_COST"] * self.collision
         detection_rew = self.cfg["DETECTION_REWARD"] * self.detection
-        #print(info_gain_rew)
-        #print(feasability_rew)
-        #print(separation_rew)
-        #print(collision_rew)
-        #print(detection_rew)
+        #print("info: ",info_gain_rew)
+        #print("feasability: ",feasability_rew)
+        #print("separation: ",separation_rew)
+        #print("collision: ",collision_rew)
+        #print("detection: ",detection_rew)
         #print()
 
         return info_gain_rew + feasability_rew + separation_rew + collision_rew + detection_rew
 
     def _get_dones(self):
-        return self.collision or self.detection# or self.t >= self.cfg["MAX_STEPS"]
+        return self.detection# or self.collision or self.t >= self.cfg["MAX_STEPS"]
 
     def _get_scans(self, entropy):
         origins = []
@@ -332,7 +339,7 @@ class SearchEnv(gym.Env):
         if not self.training:
             self.frames.append([self.ax.imshow(self.entropy, animated=True, vmin=-1, vmax=1)])
             if (self.done or self.t >= self.cfg["MAX_STEPS"]):
-                ani = animation.ArtistAnimation(self.fig, self.frames, interval=int(1000 / self.fps), blit=True, repeat=False)
+                ani = animation.ArtistAnimation(self.fig, self.frames, interval=int(self.t / self.fps), blit=True, repeat=False)
                 plt.show()
                 #ani.save(PATH_DIR+self.log_dir+self.log_name,writer=self.writer)
 

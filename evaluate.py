@@ -10,6 +10,6 @@ model = PPO.load("ppo_search", env=env)
 
 for i in range(10000):
     action, _states = model.predict(ob)
-    print(action)
+    #print(action)
     ob, rewards, terms, truncs, info = env.step(action)
     if terms or truncs: break
