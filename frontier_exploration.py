@@ -74,6 +74,7 @@ class FrontierExploration():
 
         ## Array of 2d coordinates containing cell idxs of frontier points
         self.frontier_points = np.zeros((1,2))
+        self.prev_wp = np.zeros((1,2),dtype = np.int8)
 
         print("Starting Percentage of Map Explored = ", self.completion*100.)
 
@@ -98,6 +99,10 @@ class FrontierExploration():
             for neighbor in neighbors:
                 # print("neighbor.shape = ",neighbor.shape)
 
+                ## Ignore points with occupied neighbors
+                if costmap[int(neighbor[0]),int(neighbor[1])] == 1:
+                    continue
+
                 ## if neighbor is unknown
                 if costmap[int(neighbor[0]),int(neighbor[1])] == 0:
                     if first:
@@ -120,111 +125,109 @@ class FrontierExploration():
         # print("frontier_indices.shape = ", frontier_indices.shape)
         # print("frontier_indices.dtype = ", frontier_indices.dtype)
         
-        # Part 2 - generate up to 4 frontier centroids (frontier centroids are sample points)   
-        group = np.zeros((1,2),dtype=np.int8)
-        tmp_idx = np.zeros((1,2),dtype = np.int8)
-        group[0,0] = frontier_indices[0,0]
-        group[0,1] = frontier_indices[0,1]
-        
+        # Part 2 - generate up to 4 frontier centroids (frontier centroids are sample points)  
+        frontier_centroids = np.zeros((1,2),dtype=np.int8)
+        tmp_idx = np.zeros((1,2),dtype=np.int8)
+        ## Consider the first frontier index as a frontier cluser
         for idx in frontier_indices:
-            # print("idx.shape = ",idx.shape)
-            ## Group all frontier points within 5 meters, not at map bounds
-            if ((idx[0] - group[0,0])**2 + (idx[1] - group[0,1])**2) < 50 and \
+            frontier_centroids[0,0] = int(idx[0])
+            frontier_centroids[0,1] = int(idx[1])
+            break
+        # print("frontier_centroids.shape = ", frontier_centroids.shape)
+        ## Ignore first point
+        i = 1
+        for idx in frontier_indices[1:]:
+            ## Group next frontier points outside 5 meters from original, not at map bounds
+            if np.sqrt((idx[0] - frontier_centroids[0,0])**2 + (idx[1] - frontier_centroids[0,1])**2) > 30. and \
                 idx[0] > 5 and idx[0] < 194 and idx[1] > 5 and idx[1] < 194:
                 tmp_idx[0,0] = idx[0]
                 tmp_idx[0,1] = idx[1]
-                group = np.append(group, tmp_idx,axis=0)
-        
-        ## make the centroid the average over the group
-        length = group.shape[0]
-        frontier_centroids = np.zeros((1,2),dtype=np.int8)
-        tmp = group.sum(axis=0)/length
-        frontier_centroids[0,0] = int(tmp[0])
-        frontier_centroids[0,1] = int(tmp[1])
-        # print("frontier_centroids = ",frontier_centroids)
-        # print("[GROUP 1 COMPLETE] frontier_centroids.shape = ",frontier_centroids.shape)
-
-        found_point = False
-        
-        ## Now we want to find a point >5m from the previous centroid
-        for idx in frontier_indices[50:]:
-            if ((idx[0] - frontier_centroids[0,0])**2 + (idx[1] - frontier_centroids[0,1])**2) > 100 and \
-                idx[0] > 5 and idx[0] < 194 and idx[1] > 5 and idx[1] < 194:
-                group = np.zeros((1,2),dtype=np.int8)
-                tmp_idx = np.zeros((1,2),dtype = np.int8)
-                group[0,0] = idx[0]
-                group[0,1] = idx[1]
-                found_point = True
+                frontier_centroids = np.append(frontier_centroids, tmp_idx,axis=0)
+                index_added = i
                 break
-        ## Now that we have a point >5m away, find all points within 5m to this new point
-        if found_point:
-            for idx in frontier_indices:
-                if ((idx[0] - group[0,0])**2 + (idx[1] - group[0,1])**2) < 50:
+            i += 1
+
+        # print("index added 2nd = ", index_added)
+        # print("frontier_centroids.shape = ", frontier_centroids.shape)
+
+        tmp_idx = np.zeros((1,2),dtype=np.int8)
+        j = index_added
+        if(frontier_centroids.shape[0]>=2):
+            ## Ignore all points already considered
+            for idx in frontier_indices[index_added:]:
+                ## Group next frontier points outside 5 meters from original, not at map bounds
+                if np.sqrt((idx[0] - frontier_centroids[0,0])**2 + (idx[1] - frontier_centroids[0,1])**2) > 30. and \
+                np.sqrt((idx[0] - frontier_centroids[1,0])**2 + (idx[1] - frontier_centroids[1,1])**2) > 30. and \
+                    idx[0] > 5 and idx[0] < 194 and idx[1] > 5 and idx[1] < 194:
                     tmp_idx[0,0] = idx[0]
                     tmp_idx[0,1] = idx[1]
-                    group = np.append(group,tmp_idx,axis=0)
-            tmp = group.sum(axis=0)/length
-            tmpp = np.zeros((1,2),dtype = np.int8)
-            tmpp[0,0] = int(tmp[0])
-            tmpp[0,1] = int(tmp[1])
-            frontier_centroids = np.append(frontier_centroids,tmpp,axis=0)
-            print("[GROUP 2 COMPLETE] frontier_centroids = ",frontier_centroids)
-            # print("[GROUP 2 COMPLETE] frontier_centroids.shape = ",frontier_centroids.shape)
-            found_point = False
-        else:
-            print("did not find a viable 2nd frontier point")
+                    frontier_centroids = np.append(frontier_centroids, tmp_idx,axis=0)
+                    index_added = j
+                    break
+                j += 1
+            # print("index added 3rd = ", index_added)
+            # print("frontier_centroids.shape = ", frontier_centroids.shape)
 
-        found_point = False
-        # ## Now we want to find a point >5m away from both existing centroids
-        # for idx in frontier_indices[1:]:
-        #     if ((idx[0] - frontier_centroids[0,0])**2 + (idx[1] - frontier_centroids[0,1])**2) > 50 and \
-        #         ((idx[0] - frontier_centroids[1,0])**2 + (idx[1] - frontier_centroids[1,1])**2) > 50:
-        #         group = np.zeros((1,2),dtype=np.int8)
-        #         tmp_idx = np.zeros((1,2),dtype = np.int8)
-        #         group[0,0] = idx[0]
-        #         group[0,1] = idx[1]
-        #         print("found 3rd point")
-        #         print("3rd point =",group)
-        #         found_point = True
-        #         break
-        # ## Now that we have a point >5m away, find all points within 5m to this new point
-        # if found_point:
-        #     for idx in frontier_indices:
-        #         if ((idx[0] - group[0,0])**2 + (idx[1] - group[0,1])**2) < 50:
-        #             tmp_idx[0,0] = idx[0]
-        #             tmp_idx[0,1] = idx[1]
-        #             group = np.append(group,tmp_idx,axis=0)
-        #     tmppp = group.sum(axis=0)/length
-        #     tmpp = np.zeros((1,2),dtype = np.int8)
-        #     tmpp[0,0] = int(tmppp[0])
-        #     tmpp[0,1] = int(tmppp[1])
-        #     frontier_centroids = np.append(frontier_centroids,tmpp,axis=0)
-        #     print("[GROUP 3 COMPLETE] frontier_centroids = ",frontier_centroids)
-        #     print("[GROUP 3 COMPLETE] frontier_centroids.shape = ",frontier_centroids.shape)
-        #     found_point = False
-        # else:
-        #     print("did not find a viable 3rd frontier point")
+        tmp_idx = np.zeros((1,2),dtype=np.int8)
+        k = index_added
+        if(frontier_centroids.shape[0]>=3):
+            ## Ignore all points already considered
+            for idx in frontier_indices[index_added:]:
+                ## Group next frontier points outside 5 meters from original, not at map bounds
+                if np.sqrt((idx[0] - frontier_centroids[0,0])**2 + (idx[1] - frontier_centroids[0,1])**2) > 30. and \
+                np.sqrt((idx[0] - frontier_centroids[1,0])**2 + (idx[1] - frontier_centroids[1,1])**2) > 30. and \
+                np.sqrt((idx[0] - frontier_centroids[2,0])**2 + (idx[1] - frontier_centroids[2,1])**2) > 30. and \
+                    idx[0] > 5 and idx[0] < 194 and idx[1] > 5 and idx[1] < 194:
+                    tmp_idx[0,0] = idx[0]
+                    tmp_idx[0,1] = idx[1]
+                    index_added = k
+                    frontier_centroids = np.append(frontier_centroids, tmp_idx,axis=0)
+                    break
+                k += 1
+            # print("index added 4th = ", index_added)
+            # print("frontier_centroids.shape = ", frontier_centroids.shape)
+
+        # print("frontier_centroids.shape = ",frontier_centroids.shape)
+        print("frontier_centroids = ",frontier_centroids)
 
         return frontier_centroids
         
     def sample_frontiers(self, agent_pos, agent_num):
-        print("self.frontier_points.shape[0] = ",self.frontier_points.shape)
+        # print("self.frontier_points.shape[0] = ",self.frontier_points.shape)
+        ## Send dummies in case logic below fails
         if agent_num == 0:
             waypoint = np.array([110,90])
         elif agent_num == 1:
             waypoint = np.array([90,110])
         dist = 0.
 
+        ## Mechanism to ensure we don't repeat wps to agents
+        for j in range(self.frontier_points.shape[0]):
+            # print("self.frontier_points.shape = ",self.frontier_points.shape)
+            # print("self.prev_wp.shape = ",self.prev_wp.shape)
+            if self.prev_wp[0,0] == self.frontier_points[j,0] and self.prev_wp[0,1] == self.frontier_points[j,1]:
+                self.frontier_points = np.delete(self.frontier_points, j, axis=0)
+                break
+
+        ## Get the first wp in the list that meets bounds criteria
         for i in range(self.frontier_points.shape[0]):
             if self.frontier_points[0,0] > 5 and self.frontier_points[0,0] < 194 and self.frontier_points[0,1] > 5 and self.frontier_points[0,1] < 194:
                 waypoint = np.array([self.frontier_points[i,0],self.frontier_points[i,1]])
                 dist = (self.frontier_points[i,0] - agent_pos[0])**2 + (self.frontier_points[i,1] - agent_pos[1])**2
+                selected_index = i
+                break
 
-        for point in self.frontier_points:
+        ## Iterate through remaining wps in list 
+        for point in self.frontier_points[selected_index:]:
             new_dist = (point[0] - agent_pos[0])**2 + (point[1] - agent_pos[1])**2
             if new_dist < dist and point[0] > 5 and point[0] < 194 and point[1] > 5 and point[1] < 194:
                 dist = new_dist
                 waypoint = point
+        
+        ## Only will avoid repeated wps in dual agent case
+        if agent_num == 0:
+            self.prev_wp[0,0] = waypoint[0]
+            self.prev_wp[0,1] = waypoint[1]
         print("waypoint = ", tuple(waypoint))
         return tuple(waypoint)
 
@@ -255,7 +258,7 @@ class FrontierExploration():
         position = np.zeros(2)
         position[0] = agent_pos[0][0]
         position[1] = agent_pos[0][1]
-        print("agent position = ",position)
+        # print("agent position = ",position)
 
         self.frontier_points = self.get_frontiers(costmap)
         waypoint = self.sample_frontiers(position,agent_num)
