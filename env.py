@@ -13,6 +13,9 @@ import yaml
 import EnvCreator
 import path_planning
 
+
+from frontier_exploration import FrontierExploration
+
 class SearchEnv(gym.Env):
     def __init__(self, training=True, cfg=None):
         super().__init__()
@@ -127,6 +130,7 @@ class SearchEnv(gym.Env):
 
         ## setup map and low dim map
         self.entropy = np.zeros_like(self.map, dtype=np.float32)
+        self.exploration = FrontierExploration(self.entropy, 0.95) 
         k = self.cfg["MAP_REDUCTION_FACTOR"]
         mini_rows = self.cfg["HEIGHT"] // k
         mini_cols = self.cfg["WIDTH"] // k
@@ -151,7 +155,7 @@ class SearchEnv(gym.Env):
 
         return self.obs, {}
 
-    def step(self, action):
+    def step(self, action=0):
         self.t += self.repeat
         self.path_lens = []
         vels = []
@@ -159,12 +163,16 @@ class SearchEnv(gym.Env):
             context_length = self.obs["context"].shape[0] // self.cfg["N_ROBOTS"]
             pose = np.array([self.obs["context"][context_length*i + 0], self.obs["context"][context_length*i + 1]])
             pose_rc_mini = self._rc2minirc(*self._xy2rc(*pose))
-            th = np.pi / 4 * action[i]
-            waypt = self.cfg["WAYPOINT_RADIUS"] * np.array([np.cos(th), np.sin(th)]) + pose
+
             pose_node = path_planning.Node()
             pose_node.set_pose(pose_rc_mini)
             waypt_node = path_planning.Node()
-            waypt_node.set_pose(self._rc2minirc(*self._xy2rc(*waypt)))
+            ## ever 6 loops we re-compute (every 1 loop is 1 second) 
+            ## * just unpacks the length 2 array 
+            grid_wp = self.exploration.get_next_waypoint(self.entropy, [self._xy2rc(*pose)],i)
+            ## TODO self.exploration = FrontierExploration()
+            waypt_node.set_pose(self._rc2minirc(grid_wp[0],grid_wp[1])) 
+
             path = path_planning.A_Star(self.mini_map_grid, pose_node, waypt_node)
             if path is None:
                 self.path_lens.append(self.cfg["WAYPOINT_ERROR_COST"])
@@ -208,7 +216,7 @@ class SearchEnv(gym.Env):
         self.infos = {"terminal_observation" : self.obs} if self.done else {}
         self._plot()
         
-        return self.obs, self.rew, self.done, self.t >= self.cfg["MAX_STEPS"], self.infos
+        return self.obs, self.rew, self.done, self.infos
 
     def render(self):
         pass
@@ -432,13 +440,13 @@ class SearchEnv(gym.Env):
 if __name__ == "__main__":
     from stable_baselines3.common.env_checker import check_env
     
-    env = SearchEnv(training=True, cfg="./base_config.yaml")
-    check_env(env)
-    assert False
+    env = SearchEnv(training=False, cfg="./base_config.yaml")
+    # check_env(env)
+    # assert False
     env.reset()
 
     import time
     for t in range(10_000):
-        obs, rew, done, infos = env.step([1/2,-1/2,0])
+        obs, rew, done, infos = env.step()
         if done: break
         time.sleep(1./100.)
