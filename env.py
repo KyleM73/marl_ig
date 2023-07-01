@@ -110,6 +110,7 @@ class SearchEnv(gym.Env):
     def reset(self, seed=None, options=None):
         for i in range(len(self.robots)):
             pose,ori = self._get_random_pose()
+            print("robot init pose: ",pose)
             self.client.resetBasePositionAndOrientation(self.robots[i], [*pose, 0.25], p.getQuaternionFromEuler([0, 0, ori]))
             vel = self.rng.random()
             fov = self.rng.random()
@@ -130,7 +131,7 @@ class SearchEnv(gym.Env):
 
         ## setup map and low dim map
         self.entropy = np.zeros_like(self.map, dtype=np.float32)
-        self.exploration = FrontierExploration(self.entropy, 0.95) 
+        self.exploration = FrontierExploration(self.entropy, 0.95)
         k = self.cfg["MAP_REDUCTION_FACTOR"]
         mini_rows = self.cfg["HEIGHT"] // k
         mini_cols = self.cfg["WIDTH"] // k
@@ -162,6 +163,9 @@ class SearchEnv(gym.Env):
         for i in range(len(self.robots)):
             context_length = self.obs["context"].shape[0] // self.cfg["N_ROBOTS"]
             pose = np.array([self.obs["context"][context_length*i + 0], self.obs["context"][context_length*i + 1]])
+            #pose is normalized for saving in context vector
+            pose[0] *= 0.5 * self.cfg["WIDTH"] * self.cfg["RESOLUTION"] 
+            pose[1] *= 0.5 * self.cfg["HEIGHT"] * self.cfg["RESOLUTION"]
             pose_rc_mini = self._rc2minirc(*self._xy2rc(*pose))
 
             pose_node = path_planning.Node()
@@ -174,6 +178,8 @@ class SearchEnv(gym.Env):
             waypt_node.set_pose(self._rc2minirc(grid_wp[0],grid_wp[1])) 
 
             path = path_planning.A_Star(self.mini_map_grid, pose_node, waypt_node)
+            ## TODO: waypt is sometimes the same as pose, causes code to break
+            ## waypt should never be the same as pose
             if path is None:
                 self.path_lens.append(self.cfg["WAYPOINT_ERROR_COST"])
                 vels.append(np.array([0, 0, 0]))
