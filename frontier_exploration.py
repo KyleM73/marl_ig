@@ -78,7 +78,7 @@ class FrontierExploration():
 
         print("Starting Percentage of Map Explored = ", self.completion*100.)
 
-    def get_frontiers(self, costmap):
+    def get_frontiers(self, costmap, agent_pos):
         # Part 1 - define all frontier cells as free points
         #          that have unknown neighbors
         
@@ -95,13 +95,17 @@ class FrontierExploration():
             ## get 4 neighbors
             neighbors = nhood4(cell)
 
+            ## If point too close to robot, ignore
+            if np.sqrt( (cell[0] - agent_pos[0])**2 + (cell[1]- agent_pos[1])**2 ) < 10:
+                continue
+
             ## check if any neighbors are unknown
             for neighbor in neighbors:
                 # print("neighbor.shape = ",neighbor.shape)
 
                 ## Ignore points with occupied neighbors
                 if costmap[int(neighbor[0]),int(neighbor[1])] == 1:
-                    continue
+                    break
 
                 ## if neighbor is unknown
                 if costmap[int(neighbor[0]),int(neighbor[1])] == 0:
@@ -122,7 +126,7 @@ class FrontierExploration():
         ##      neighbors as frontier points
 
         # print("frontier_indices = ", frontier_indices)
-        # print("frontier_indices.shape = ", frontier_indices.shape)
+        print("frontier_indices.shape = ", frontier_indices.shape)
         # print("frontier_indices.dtype = ", frontier_indices.dtype)
         
         # Part 2 - generate up to 4 frontier centroids (frontier centroids are sample points)  
@@ -187,8 +191,27 @@ class FrontierExploration():
             # print("index added 4th = ", index_added)
             # print("frontier_centroids.shape = ", frontier_centroids.shape)
 
+        
+        tmp_idx = np.zeros((1,2),dtype=np.int8)
+        l = index_added
+        if(frontier_centroids.shape[0]>=4):
+            ## Ignore all points already considered
+            for idx in frontier_indices[index_added:]:
+                ## Group next frontier points outside 5 meters from original, not at map bounds
+                if np.sqrt((idx[0] - frontier_centroids[0,0])**2 + (idx[1] - frontier_centroids[0,1])**2) > 30. and \
+                np.sqrt((idx[0] - frontier_centroids[1,0])**2 + (idx[1] - frontier_centroids[1,1])**2) > 30. and \
+                np.sqrt((idx[0] - frontier_centroids[2,0])**2 + (idx[1] - frontier_centroids[2,1])**2) > 30. and \
+                np.sqrt((idx[0] - frontier_centroids[3,0])**2 + (idx[1] - frontier_centroids[3,1])**2) > 30. and \
+                idx[0] > 5 and idx[0] < 194 and idx[1] > 5 and idx[1] < 194:
+                    tmp_idx[0,0] = idx[0]
+                    tmp_idx[0,1] = idx[1]
+                    index_added = l
+                    frontier_centroids = np.append(frontier_centroids, tmp_idx,axis=0)
+                    break
+                l += 1
+
         # print("frontier_centroids.shape = ",frontier_centroids.shape)
-        print("frontier_centroids = ",frontier_centroids)
+        # print("frontier_centroids = ",frontier_centroids)
 
         return frontier_centroids
         
@@ -228,7 +251,7 @@ class FrontierExploration():
         if agent_num == 0:
             self.prev_wp[0,0] = waypoint[0]
             self.prev_wp[0,1] = waypoint[1]
-        print("waypoint = ", tuple(waypoint))
+        # print("waypoint = ", tuple(waypoint))
         return tuple(waypoint)
 
     def get_next_waypoint(self, costmap, agent_pos, agent_num):
@@ -260,7 +283,10 @@ class FrontierExploration():
         position[1] = agent_pos[0][1]
         # print("agent position = ",position)
 
-        self.frontier_points = self.get_frontiers(costmap)
+        self.frontier_points = self.get_frontiers(costmap, position)
         waypoint = self.sample_frontiers(position,agent_num)
+
+        print("agent {} position =".format(agent_num),agent_pos)
+        print("agent {} waypoint =".format(agent_num),waypoint)
 
         return waypoint

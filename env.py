@@ -106,6 +106,8 @@ class SearchEnv(gym.Env):
             target_node = path_planning.Node()
             target_node.set_pose(self._rc2minirc(*self._xy2rc(*pose[:2])))
             self.target_nodes.append(target_node)
+        
+        self.counter = 20
 
     def reset(self, seed=None, options=None):
         for i in range(len(self.robots)):
@@ -154,6 +156,8 @@ class SearchEnv(gym.Env):
         self.obs = self._get_obs()
         self._setup_plot()
 
+        self.counter = 20
+
         return self.obs, {}
 
     def step(self, action=0):
@@ -173,11 +177,15 @@ class SearchEnv(gym.Env):
             waypt_node = path_planning.Node()
             ## ever 6 loops we re-compute (every 1 loop is 1 second) 
             ## * just unpacks the length 2 array 
+            print("self.counter = ",self.counter)
+            # if self.counter >= 10:
             grid_wp = self.exploration.get_next_waypoint(self.entropy, [self._xy2rc(*pose)],i)
-            ## TODO self.exploration = FrontierExploration()
+            self.counter = 0
             waypt_node.set_pose(self._rc2minirc(grid_wp[0],grid_wp[1])) 
+            self.counter += 1
 
             path = path_planning.A_Star(self.mini_map_grid, pose_node, waypt_node)
+            print("len(path) = ",len(path))
             ## TODO: waypt is sometimes the same as pose, causes code to break
             ## waypt should never be the same as pose
             if path is None:
