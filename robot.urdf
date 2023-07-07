@@ -13,13 +13,13 @@
     </inertial>
     <collision>
       <geometry>
-        <cylinder length="0.5" radius="0.2"/>
+        <cylinder length="0.5" radius="0.45"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
     <visual>
       <geometry>
-        <cylinder length="0.5" radius="0.2"/>
+        <cylinder length="0.5" radius="0.45"/>
       </geometry>
       <material name="red"/>
       <origin rpy="0 0 0" xyz="0 0 0"/>
