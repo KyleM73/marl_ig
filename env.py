@@ -225,7 +225,7 @@ class SearchEnv(gym.Env):
                 time.sleep(1./self.cfg["PHYSICS_HZ"])
 
             if not i % self.scan_repeat:
-                print(self._rc2minirc(*self._xy2rc(*self.obs["context"][:2]*(0.5 * self.cfg["WIDTH"] * self.cfg["RESOLUTION"]))))
+                #print(self._rc2minirc(*self._xy2rc(*self.obs["context"][:2]*(0.5 * self.cfg["WIDTH"] * self.cfg["RESOLUTION"]))))
                 self.obs = self._get_obs()
         self.rew = self._get_rew()
         self.episode_rewards += self.rew
