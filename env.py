@@ -150,7 +150,8 @@ class SearchEnv(gym.Env):
         self.done = False
         self.t = 0
         self.target_idx = 0
-        self.repeat = max(1,self.cfg["PHYSICS_HZ"] // self.cfg["UPDATE_HZ"])
+        self.repeat = int(max(1,self.cfg["PHYSICS_HZ"] / self.cfg["UPDATE_HZ"]))
+        self.scan_repeat = int(max(1,self.cfg["PHYSICS_HZ"] / self.cfg["SCAN_HZ"]))
         self.episode_rewards = 0
 
         self.obs = self._get_obs()
@@ -223,7 +224,8 @@ class SearchEnv(gym.Env):
             if not self.training:
                 time.sleep(1./self.cfg["PHYSICS_HZ"])
 
-        self.obs = self._get_obs()
+            if i % self.scan_repeat == 0:
+                self.obs = self._get_obs()
         self.rew = self._get_rew()
         self.episode_rewards += self.rew
         self.done = self._get_dones()
