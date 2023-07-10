@@ -178,7 +178,7 @@ class SearchEnv(gym.Env):
             waypt_node = path_planning.Node()
             ## ever 6 loops we re-compute (every 1 loop is 1 second) 
             ## * just unpacks the length 2 array 
-            print("self.counter = ",self.counter)
+            # print("self.counter = ",self.counter)
             # if self.counter >= 10:
             grid_wp = self.exploration.get_next_waypoint(self.entropy, [self._xy2rc(*pose)],i)
             self.counter = 0
@@ -186,7 +186,7 @@ class SearchEnv(gym.Env):
             self.counter += 1
 
             path = path_planning.A_Star(self.mini_map_grid, pose_node, waypt_node)
-            print("len(path) = ",len(path))
+            # print("len(path) = ",len(path))
             ## TODO: waypt is sometimes the same as pose, causes code to break
             ## waypt should never be the same as pose
             if path is None:

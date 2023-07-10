@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 
 ## Helper Functions
 def nhood4(idx):
@@ -24,32 +25,40 @@ def nhood4(idx):
 
 def nhood8(idx):
     out = np.zeros((8,2))
-    ## Above Left cell
-    out[0,0] = idx[0] - 1
-    out[0,1] = idx[1] - 1
     ## Above cell
-    out[1,0] = idx[0] - 1
-    out[1,1] = idx[1]
-    ## Above Right cell
-    out[2,0] = idx[0] - 1
-    out[2,1] = idx[1] + 1
+    out[0,0] = idx[0] - 1
+    out[0,1] = idx[1]
     ## Left cell
-    out[3,0] = idx[0]
-    out[3,1] = idx[1] - 1
+    out[1,0] = idx[0]
+    out[1,1] = idx[1] - 1
     ## Right cell
-    out[4,0] = idx[0]
-    out[4,1] = idx[1] + 1
-    ## Below Left cell
-    out[5,0] = idx[0] + 1
-    out[5,1] = idx[1] - 1
+    out[2,0] = idx[0]
+    out[2,1] = idx[1] + 1
     ## Below cell
-    out[6,0] = idx[0] + 1
-    out[6,1] = idx[1]
-    ## Below Right cell
-    out[7,0] = idx[0] + 1
-    out[7,1] = idx[1] + 1
+    out[3,0] = idx[0] + 1
+    out[3,1] = idx[1]
+    ## Above cell
+    out[0,0] = idx[0] - 3
+    out[0,1] = idx[1]
+    ## Left cell
+    out[1,0] = idx[0]
+    out[1,1] = idx[1] - 3
+    ## Right cell
+    out[2,0] = idx[0]
+    out[2,1] = idx[1] + 3
+    ## Below cell
+    out[3,0] = idx[0] + 3
+    out[3,1] = idx[1]
+
+    for i in range(8):
+        out[i,0] = np.clip(out[i,0],0,199)
+        out[i,1] = np.clip(out[i,1],0,199)
 
     return out
+
+## TODO: 
+# 3) now that we have a better list, filter to leave only those at least so far from each other
+# 4) last thing is to select the waypoints based on something besides only distance
 
 class FrontierExploration():
     def __init__(self, costmap, threshold):
@@ -73,8 +82,11 @@ class FrontierExploration():
         self.exploration_threshold = threshold
 
         ## Array of 2d coordinates containing cell idxs of frontier points
-        self.frontier_points = np.zeros((1,2))
+        self.candidate_waypoints = np.zeros((1,2))
         self.prev_wp = np.zeros((1,2),dtype = np.int8)
+
+        self.agent0_pos = np.zeros(2)
+        self.agent1_pos = np.zeros(2)
 
         print("Starting Percentage of Map Explored = ", self.completion*100.)
 
@@ -82,183 +94,313 @@ class FrontierExploration():
         # Part 1 - define all frontier cells as free points
         #          that have unknown neighbors
         
-        ## use np.argwhere to get indices all free cells
+        ## get indices all free cells
         free_cells = np.argwhere(costmap == -1)
-        # print("number of frontier candidates = ",free_cells.shape)
+        # print("number of free cells = ",free_cells.shape)
 
-        frontier_indices = np.zeros((1,2),dtype = np.int8)
-        tmp_cell = np.zeros((1,2),dtype = np.int8)
-        first = True
+        count_free = -1
+        remove_rows = []
 
-        ## iterate through free cells
+        ## Remove indices near edges
         for cell in free_cells:
-            ## get 4 neighbors
-            neighbors = nhood4(cell)
-
-            ## If point too close to robot, ignore
-            if np.sqrt( (cell[0] - agent_pos[0])**2 + (cell[1]- agent_pos[1])**2 ) < 10:
+            count_free += 1
+            if cell[0] >= 194 or cell[0] <= 5:
+                remove_rows.append(count_free)
                 continue
+            if cell[1] >= 194 or cell[1] <= 5:
+                remove_rows.append(count_free)
+                continue
+        # print("rows to be removed = ",remove_rows)
+        free_cells = np.delete(free_cells,remove_rows,axis=0)
+        # print("number of free cells after edge removal = ",free_cells.shape)
 
-            ## check if any neighbors are unknown
+        count_free = -1
+        remove_rows = []
+        # print("number of free cells = ",free_cells.shape)
+
+        ## Remove indices with occupied neighbors
+        for cell in free_cells:
+            count_free += 1
+            neighbors = nhood4(cell)
+            ## Remove cells with occupied neighbors
             for neighbor in neighbors:
-                # print("neighbor.shape = ",neighbor.shape)
-
-                ## Ignore points with occupied neighbors
                 if costmap[int(neighbor[0]),int(neighbor[1])] == 1:
+                    remove_rows.append(count_free)
                     break
+        # print("rows to be removed = ",remove_rows)
+        free_cells = np.delete(free_cells,remove_rows,axis=0)
+        # print("number of free cells after occ neighbor removal = ",free_cells.shape)
 
-                ## if neighbor is unknown
-                if costmap[int(neighbor[0]),int(neighbor[1])] == 0:
-                    if first:
-                        frontier_indices[0,0] = cell[0]
-                        frontier_indices[0,1] = cell[1]
-                        first = False
-                        break ## only add cell once
-                    else:
-                        # print("frontier_indices.shape = ",frontier_indices.shape)
-                        # print("cell.shape = ",cell.shape)
-                        tmp_cell[0,0] = cell[0]
-                        tmp_cell[0,1] = cell[1]
-                        frontier_indices = np.append(frontier_indices,tmp_cell,axis=0)
-                        break ## only add cell once
+        count_free = -1
+        remove_rows = []
 
-        ## Now we have labeled all free cells that have unknown 
-        ##      neighbors as frontier points
+        # print("number of free cells = ",free_cells.shape)
+        ## Remove indices with all known neighbors
+        for cell in free_cells:
+            free_neighbor_count = 0
+            count_free += 1
+            neighbors = nhood4(cell)
+            for neighbor in neighbors:
+                if costmap[int(neighbor[0]),int(neighbor[1])] == -1:
+                    free_neighbor_count += 1
+            if free_neighbor_count >= 4:
+                remove_rows.append(count_free)
+        # print("rows to be removed = ",remove_rows)
+        frontier_indices = np.delete(free_cells,remove_rows,axis=0)
+        # print("number of free cells after free neighbor removal = ",free_cells.shape)        
 
-        # print("frontier_indices = ", frontier_indices)
-        print("frontier_indices.shape = ", frontier_indices.shape)
-        # print("frontier_indices.dtype = ", frontier_indices.dtype)
+        ## Now we have labeled all free cells that 1) are not near edges; 2) have occupied neighbor cells
+        ## or 3) have only known neighbor cells
+
+        ## Now remove points that are near by each other
+        ## Below we generate up to 15 candidate frontiers, 
+        ## all more than 30 cells distance from each other
+
+        tmp_idx = frontier_indices[0,:]
+        num_pts = 0
+        count_free = 0 # here we start at index 1 in the loop
+        remove_rows = []
+        ## Remove points near point 0
+        for cell in frontier_indices[1:]:
+            count_free += 1
+            dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+            if dist <= 30.:
+                remove_rows.append(count_free)
+
+        frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+        tmp_idx = frontier_indices[1,:]
+        num_pts += 1
+        count_free = 1 # here we start at index 2 in the loop
+        remove_rows = []
+        ## Remove points near point 1
+        for cell in frontier_indices[2:]:
+            count_free += 1
+            dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+            if dist <= 30.:
+                remove_rows.append(count_free)
+        frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+        if frontier_indices.shape[0] > 3:
+            tmp_idx = frontier_indices[2,:] 
+            num_pts += 1
+            count_free = 2 # here we start at index 3 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[3:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+        if frontier_indices.shape[0] > 4:
+            tmp_idx = frontier_indices[3,:] 
+            num_pts += 1
+            count_free = 3 # here we start at index 4 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[4:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+        if frontier_indices.shape[0] > 5:
+            tmp_idx = frontier_indices[4,:] 
+            num_pts += 1
+            count_free = 4 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[5:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+        if frontier_indices.shape[0] > 6:
+            tmp_idx = frontier_indices[5,:] 
+            num_pts += 1
+            count_free = 5 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[6:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+        if frontier_indices.shape[0] > 7:
+            tmp_idx = frontier_indices[6,:] 
+            num_pts += 1
+            count_free = 6 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[7:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+        if frontier_indices.shape[0] > 8:
+            tmp_idx = frontier_indices[7,:] 
+            num_pts += 1
+            count_free = 7 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[8:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
         
-        # Part 2 - generate up to 4 frontier centroids (frontier centroids are sample points)  
-        frontier_centroids = np.zeros((1,2),dtype=np.int8)
-        tmp_idx = np.zeros((1,2),dtype=np.int8)
-        ## Consider the first frontier index as a frontier cluser
-        for idx in frontier_indices:
-            frontier_centroids[0,0] = int(idx[0])
-            frontier_centroids[0,1] = int(idx[1])
-            break
-        # print("frontier_centroids.shape = ", frontier_centroids.shape)
-        ## Ignore first point
-        i = 1
-        for idx in frontier_indices[1:]:
-            ## Group next frontier points outside 5 meters from original, not at map bounds
-            if np.sqrt((idx[0] - frontier_centroids[0,0])**2 + (idx[1] - frontier_centroids[0,1])**2) > 30. and \
-                idx[0] > 5 and idx[0] < 194 and idx[1] > 5 and idx[1] < 194:
-                tmp_idx[0,0] = idx[0]
-                tmp_idx[0,1] = idx[1]
-                frontier_centroids = np.append(frontier_centroids, tmp_idx,axis=0)
-                index_added = i
-                break
-            i += 1
+        # print("frontier_indices.shape[0] = ",frontier_indices.shape)
 
-        # print("index added 2nd = ", index_added)
-        # print("frontier_centroids.shape = ", frontier_centroids.shape)
-
-        tmp_idx = np.zeros((1,2),dtype=np.int8)
-        j = index_added
-        if(frontier_centroids.shape[0]>=2):
-            ## Ignore all points already considered
-            for idx in frontier_indices[index_added:]:
-                ## Group next frontier points outside 5 meters from original, not at map bounds
-                if np.sqrt((idx[0] - frontier_centroids[0,0])**2 + (idx[1] - frontier_centroids[0,1])**2) > 30. and \
-                np.sqrt((idx[0] - frontier_centroids[1,0])**2 + (idx[1] - frontier_centroids[1,1])**2) > 30. and \
-                    idx[0] > 5 and idx[0] < 194 and idx[1] > 5 and idx[1] < 194:
-                    tmp_idx[0,0] = idx[0]
-                    tmp_idx[0,1] = idx[1]
-                    frontier_centroids = np.append(frontier_centroids, tmp_idx,axis=0)
-                    index_added = j
-                    break
-                j += 1
-            # print("index added 3rd = ", index_added)
-            # print("frontier_centroids.shape = ", frontier_centroids.shape)
-
-        tmp_idx = np.zeros((1,2),dtype=np.int8)
-        k = index_added
-        if(frontier_centroids.shape[0]>=3):
-            ## Ignore all points already considered
-            for idx in frontier_indices[index_added:]:
-                ## Group next frontier points outside 5 meters from original, not at map bounds
-                if np.sqrt((idx[0] - frontier_centroids[0,0])**2 + (idx[1] - frontier_centroids[0,1])**2) > 30. and \
-                np.sqrt((idx[0] - frontier_centroids[1,0])**2 + (idx[1] - frontier_centroids[1,1])**2) > 30. and \
-                np.sqrt((idx[0] - frontier_centroids[2,0])**2 + (idx[1] - frontier_centroids[2,1])**2) > 30. and \
-                    idx[0] > 5 and idx[0] < 194 and idx[1] > 5 and idx[1] < 194:
-                    tmp_idx[0,0] = idx[0]
-                    tmp_idx[0,1] = idx[1]
-                    index_added = k
-                    frontier_centroids = np.append(frontier_centroids, tmp_idx,axis=0)
-                    break
-                k += 1
-            # print("index added 4th = ", index_added)
-            # print("frontier_centroids.shape = ", frontier_centroids.shape)
-
+        if frontier_indices.shape[0] > 9:
+            tmp_idx = frontier_indices[8,:] 
+            num_pts += 1
+            count_free = 8 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[9:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
         
-        tmp_idx = np.zeros((1,2),dtype=np.int8)
-        l = index_added
-        if(frontier_centroids.shape[0]>=4):
-            ## Ignore all points already considered
-            for idx in frontier_indices[index_added:]:
-                ## Group next frontier points outside 5 meters from original, not at map bounds
-                if np.sqrt((idx[0] - frontier_centroids[0,0])**2 + (idx[1] - frontier_centroids[0,1])**2) > 30. and \
-                np.sqrt((idx[0] - frontier_centroids[1,0])**2 + (idx[1] - frontier_centroids[1,1])**2) > 30. and \
-                np.sqrt((idx[0] - frontier_centroids[2,0])**2 + (idx[1] - frontier_centroids[2,1])**2) > 30. and \
-                np.sqrt((idx[0] - frontier_centroids[3,0])**2 + (idx[1] - frontier_centroids[3,1])**2) > 30. and \
-                idx[0] > 5 and idx[0] < 194 and idx[1] > 5 and idx[1] < 194:
-                    tmp_idx[0,0] = idx[0]
-                    tmp_idx[0,1] = idx[1]
-                    index_added = l
-                    frontier_centroids = np.append(frontier_centroids, tmp_idx,axis=0)
-                    break
-                l += 1
+        # print("frontier_indices.shape[0] = ",frontier_indices.shape)
 
-        # print("frontier_centroids.shape = ",frontier_centroids.shape)
-        # print("frontier_centroids = ",frontier_centroids)
+        if frontier_indices.shape[0] > 10:
+            tmp_idx = frontier_indices[9,:] 
+            num_pts += 1
+            count_free = 9 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[10:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
 
-        return frontier_centroids
+
+        if frontier_indices.shape[0] > 11:
+            tmp_idx = frontier_indices[10,:] 
+            num_pts += 1
+            count_free = 10 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[11:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+        if frontier_indices.shape[0] > 12:
+            tmp_idx = frontier_indices[11,:] 
+            num_pts += 1
+            count_free = 11 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[12:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+        if frontier_indices.shape[0] > 13:
+            tmp_idx = frontier_indices[12,:] 
+            num_pts += 1
+            count_free = 12 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[13:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+
+        if frontier_indices.shape[0] > 14:
+            tmp_idx = frontier_indices[13,:] 
+            num_pts += 1
+            count_free = 13 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[14:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
+
+
+        if frontier_indices.shape[0] > 15:
+            tmp_idx = frontier_indices[14,:] 
+            num_pts += 1
+            count_free = 14 # here we start at index 5 in the loop
+            remove_rows = []
+            ## Remove points near point 2
+            for cell in frontier_indices[15:]:
+                count_free += 1
+                dist = np.sqrt(pow(cell[0] - tmp_idx[0],2) + pow(cell[1] - tmp_idx[1],2))
+                if dist <= 30.:
+                    remove_rows.append(count_free)
+            frontier_indices = np.delete(frontier_indices,remove_rows,axis=0)
         
+        frontier_indices = frontier_indices[0:num_pts]  
+        print("Number of candidate frontiers = ",frontier_indices.shape[0])
+
+        return frontier_indices
+        
+    
+    ## Now that we have each other agent pos, what we can do is do a cost = np.zeros((2,len(self.candidate_waypoints)))
+    ## and include the score of dist from self and dist from other agent; first equally weighted
     def sample_frontiers(self, agent_pos, agent_num):
-        # print("self.frontier_points.shape[0] = ",self.frontier_points.shape)
-        ## Send dummies in case logic below fails
-        if agent_num == 0:
-            waypoint = np.array([110,90])
-        elif agent_num == 1:
-            waypoint = np.array([90,110])
-        dist = 0.
 
-        ## Mechanism to ensure we don't repeat wps to agents
-        for j in range(self.frontier_points.shape[0]):
-            # print("self.frontier_points.shape = ",self.frontier_points.shape)
-            # print("self.prev_wp.shape = ",self.prev_wp.shape)
-            if self.prev_wp[0,0] == self.frontier_points[j,0] and self.prev_wp[0,1] == self.frontier_points[j,1]:
-                self.frontier_points = np.delete(self.frontier_points, j, axis=0)
-                break
+        ## remove candidates from the list if the previous agent is already assigned them
+        if agent_num:
+            for j in range(self.candidate_waypoints.shape[0]):
+                if self.prev_wp[0,0] == self.candidate_waypoints[j,0] and self.prev_wp[0,1] == self.candidate_waypoints[j,1]:
+                    self.candidate_waypoints = np.delete(self.candidate_waypoints, j, axis=0)
+                    break
 
-        ## Get the first wp in the list that meets bounds criteria
-        for i in range(self.frontier_points.shape[0]):
-            if self.frontier_points[0,0] > 5 and self.frontier_points[0,0] < 194 and self.frontier_points[0,1] > 5 and self.frontier_points[0,1] < 194:
-                waypoint = np.array([self.frontier_points[i,0],self.frontier_points[i,1]])
-                dist = (self.frontier_points[i,0] - agent_pos[0])**2 + (self.frontier_points[i,1] - agent_pos[1])**2
-                selected_index = i
-                break
-
-        ## Iterate through remaining wps in list 
-        for point in self.frontier_points[selected_index:]:
-            new_dist = (point[0] - agent_pos[0])**2 + (point[1] - agent_pos[1])**2
-            if new_dist < dist and point[0] > 5 and point[0] < 194 and point[1] > 5 and point[1] < 194:
-                dist = new_dist
-                waypoint = point
         
-        ## Only will avoid repeated wps in dual agent case
+        cost = np.zeros(self.candidate_waypoints.shape[0])
+        ## cost = -travel_dist + dist_from_other_agent (antidist)
+        for i in range(cost.shape[0]):
+            dist = np.sqrt(pow(self.candidate_waypoints[i,0] - agent_pos[0],2) + pow(self.candidate_waypoints[i,1] - agent_pos[1],2))
+            if not agent_num: # i.e. agent 0
+                antidist = np.sqrt(pow(self.candidate_waypoints[i,0] - self.agent1_pos[0],2) + pow(self.candidate_waypoints[i,1] - self.agent1_pos[1],2))
+            else:
+                antidist = np.sqrt(pow(self.candidate_waypoints[i,0] - self.agent0_pos[0],2) + pow(self.candidate_waypoints[i,1] - self.agent0_pos[1],2))
+            cost[i] = (-1) * dist + (1) * antidist
+        opt_idx = np.argmax(cost)
+
         if agent_num == 0:
-            self.prev_wp[0,0] = waypoint[0]
-            self.prev_wp[0,1] = waypoint[1]
-        # print("waypoint = ", tuple(waypoint))
-        return tuple(waypoint)
+            self.prev_wp[0,:] = self.candidate_waypoints[opt_idx,:]
+
+        return tuple(self.candidate_waypoints[opt_idx,:])
+
 
     def get_next_waypoint(self, costmap, agent_pos, agent_num):
 
         print("getting next waypoint for agent ",agent_num)
-
-        # print("costmap = ",costmap)
+        if agent_num == 1:
+            self.agent1_pos[0] = agent_pos[0][0]
+            self.agent1_pos[0] = agent_pos[0][1]
+        else:
+            self.agent0_pos[0] = agent_pos[0][0]
+            self.agent0_pos[0] = agent_pos[0][1]
 
         ## Update Exploration Completion
         self.known_cells = 0
@@ -275,15 +417,12 @@ class FrontierExploration():
         else:
             print("Percentage of Map Explored = ", self.completion*100.)
 
-        assert agent_pos[0][0] >= 0 and agent_pos[0][0] < self.size_x
-        assert agent_pos[0][1] >= 0 and agent_pos[0][1] < self.size_y
-
         position = np.zeros(2)
         position[0] = agent_pos[0][0]
         position[1] = agent_pos[0][1]
         # print("agent position = ",position)
 
-        self.frontier_points = self.get_frontiers(costmap, position)
+        self.candidate_waypoints = self.get_frontiers(costmap, position)
         waypoint = self.sample_frontiers(position,agent_num)
 
         print("agent {} position =".format(agent_num),agent_pos)
