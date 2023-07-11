@@ -293,7 +293,7 @@ class SearchEnv(gym.Env):
         return info_gain_rew + feasability_rew + separation_rew + collision_rew + detection_rew
 
     def _get_dones(self):
-        return self.detection# or self.collision or self.t >= self.cfg["MAX_STEPS"]
+        return 0#self.detection# or self.collision or self.t >= self.cfg["MAX_STEPS"]
 
     def _get_scans(self, entropy):
         origins = []
@@ -463,7 +463,7 @@ if __name__ == "__main__":
     env.reset()
 
     import time
-    for t in range(10_000):
+    for t in range(1_000_000):
         obs, rew, done, infos = env.step()
         if done: break
         time.sleep(1./100.)
