@@ -530,7 +530,7 @@ class FrontierExploration():
                     count += 1
 
             print("number of unknown neighbors + those of midway point = ", count)
-            cost[i] = (-0.1) * dist + (2) * antidist + (100) * count / dist / 10
+            cost[i] = (100) * count# / dist / 10 # + (-0.1) * dist + (2) * antidist
 
         print("cost = ",cost)
         opt_idx = np.argmax(cost)
